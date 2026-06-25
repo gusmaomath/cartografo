@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cartógrafo — Cartas de Gestores</title>
+  <link rel="stylesheet" href="/web/styles.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="topo-marca">
+      <span class="marca-tag">CARTÓGRAFO</span>
+      <span class="marca-nome">Cartas de gestores · consenso de mercado</span>
+    </div>
+    <div class="topo-acoes">
+      <span id="status-coleta" class="status"></span>
+      <button id="btn-coletar" class="btn">Coletar agora</button>
+    </div>
+  </header>
+
+  <nav class="abas" role="tablist">
+    <button class="aba ativa" data-aba="cartas" role="tab">Cartas</button>
+    <button class="aba" data-aba="resumos" role="tab">Resumos</button>
+    <button class="aba" data-aba="consenso" role="tab">Consenso</button>
+    <button class="aba" data-aba="fontes" role="tab">Fontes</button>
+  </nav>
+
+  <main>
+    <section id="painel-cartas" class="painel ativo"></section>
+    <section id="painel-resumos" class="painel"></section>
+    <section id="painel-consenso" class="painel"></section>
+    <section id="painel-fontes" class="painel"></section>
+  </main>
+
+  <script src="/web/app.js"></script>
+</body>
+</html>

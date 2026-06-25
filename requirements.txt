@@ -1,0 +1,14 @@
+# Dependências de NÚCLEO. Equivale a `pip install .`
+# Extras opcionais ficam no pyproject.toml (não instalados por padrão):
+#   pip install ".[dynamic]"   # Playwright (páginas SPA/JS)
+#   pip install ".[ocr]"       # OCR de PDFs escaneados (PyMuPDF + tesseract)
+#   pip install ".[dev]"       # pytest + ruff
+httpx>=0.27
+beautifulsoup4>=4.12
+lxml>=5.2
+pdfplumber>=0.11
+python-dateutil>=2.9
+SQLAlchemy>=2.0
+fastapi>=0.111
+uvicorn[standard]>=0.30
+APScheduler>=3.10

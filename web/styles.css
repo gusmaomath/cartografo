@@ -1,0 +1,123 @@
+:root {
+  --ink: #14181c;
+  --ink-2: #2a3038;
+  --paper: #f6f6f2;
+  --surface: #ffffff;
+  --linha: #e3e3dc;
+  --texto: #1a1d21;
+  --muted: #6b7178;
+  --accent: #0f6e56;       /* verde-research */
+  --long: #1e8a5a;
+  --short: #c0392b;
+  --neutro: #8a8f96;
+  --mono: "SF Mono", "JetBrains Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--paper); color: var(--texto);
+  font-family: var(--sans); font-size: 15px; line-height: 1.6;
+}
+
+/* Topo */
+.topo {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--ink); color: #fff; padding: 14px 24px;
+}
+.marca-tag {
+  font-family: var(--mono); font-weight: 600; letter-spacing: 2px;
+  background: var(--accent); color: #fff; padding: 3px 8px; border-radius: 3px; font-size: 13px;
+}
+.marca-nome { margin-left: 10px; color: #c9cdd2; font-size: 14px; }
+.topo-acoes { display: flex; align-items: center; gap: 14px; }
+.status { font-family: var(--mono); font-size: 12px; color: #9aa0a6; }
+.btn {
+  background: var(--accent); color: #fff; border: 0; padding: 8px 16px;
+  border-radius: 4px; font-size: 14px; cursor: pointer; font-family: var(--sans);
+}
+.btn:hover { background: #0c5a47; }
+.btn:disabled { background: #4a5560; cursor: not-allowed; }
+
+/* Abas */
+.abas { display: flex; gap: 2px; background: var(--ink-2); padding: 0 16px; }
+.aba {
+  background: transparent; border: 0; color: #b7bcc2; padding: 12px 18px;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .5px; cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.aba:hover { color: #fff; }
+.aba.ativa { color: #fff; border-bottom-color: var(--accent); }
+
+main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.painel { display: none; }
+.painel.ativo { display: block; }
+
+.vazio {
+  border: 1px dashed var(--linha); border-radius: 8px; padding: 40px;
+  text-align: center; color: var(--muted); background: var(--surface);
+}
+
+/* Tabela de cartas */
+table { width: 100%; border-collapse: collapse; background: var(--surface);
+        border: 1px solid var(--linha); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--linha); }
+th { font-family: var(--mono); font-size: 12px; letter-spacing: .5px;
+     color: var(--muted); text-transform: uppercase; background: #fbfbf9; }
+tr:last-child td { border-bottom: 0; }
+td.gestora { font-weight: 500; }
+.tag { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 3px; }
+.tag.pdf { background: #fdecea; color: #b03a2e; }
+.tag.html { background: #e8f3ef; color: var(--accent); }
+.tag.coletado { background: #eef0f2; color: var(--muted); }
+.tag.resumido { background: #e8f3ef; color: var(--accent); }
+
+/* Cards de resumo */
+.card { background: var(--surface); border: 1px solid var(--linha);
+        border-radius: 8px; padding: 18px 20px; margin-bottom: 16px; }
+.card h3 { margin: 0 0 4px; font-size: 16px; }
+.card .tese { color: var(--ink-2); margin: 6px 0 14px; }
+.linha-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.badge { font-family: var(--mono); font-size: 12px; padding: 3px 9px;
+         border-radius: 4px; background: #f0f1ed; color: var(--ink-2); }
+.badge b { color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 3px 9px; border-radius: 4px;
+        border: 1px solid var(--linha); }
+.chip.long  { border-color: var(--long);  color: var(--long); }
+.chip.short { border-color: var(--short); color: var(--short); }
+.chip.neutro{ border-color: var(--neutro);color: var(--neutro); }
+.rotulo { font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+          letter-spacing: .5px; color: var(--muted); margin: 12px 0 6px; }
+
+/* Consenso */
+.bloco-consenso { margin-bottom: 28px; }
+.bloco-consenso > h2 { font-size: 15px; font-family: var(--mono); letter-spacing: .5px;
+                       border-left: 3px solid var(--accent); padding-left: 10px; }
+.item-consenso { background: var(--surface); border: 1px solid var(--linha);
+                 border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
+.item-consenso .tema { font-weight: 600; }
+.forca { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 3px;
+         background: #e8f3ef; color: var(--accent); margin-left: 8px; }
+.divergencia { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch; }
+.lado { border: 1px solid var(--linha); border-radius: 6px; padding: 10px 12px; background: #fbfbf9; }
+.lado.a { border-top: 2px solid var(--long); }
+.lado.b { border-top: 2px solid var(--short); }
+.versus { display: flex; align-items: center; font-family: var(--mono);
+          color: var(--muted); font-size: 13px; }
+.gestoras-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.gchip { font-family: var(--mono); font-size: 11px; background: #eef0f2;
+         color: var(--ink-2); padding: 2px 7px; border-radius: 3px; }
+.leitura { background: var(--surface); border: 1px solid var(--linha); border-radius: 8px;
+           padding: 16px 18px; color: var(--ink-2); }
+.leitura-macro p { background: var(--surface); border: 1px solid var(--linha);
+                   border-radius: 8px; padding: 16px 18px; color: var(--ink-2); margin: 0; }
+
+/* Status das fontes */
+.tag.ok   { background: #e8f3ef; color: var(--accent); }
+.tag.erro { background: #fdecea; color: var(--short); }
+.motivo { color: var(--muted); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .divergencia { grid-template-columns: 1fr; }
+  .versus { justify-content: center; }
+}
