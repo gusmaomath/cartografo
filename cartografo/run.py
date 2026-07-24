@@ -11,7 +11,9 @@ logging.basicConfig(level=logging.INFO,
 def main() -> None:
     parser = argparse.ArgumentParser(description="Cartógrafo — pipeline de cartas de gestores")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("coletar", help="coleta a carta mais recente das fontes implementadas")
+    p_col = sub.add_parser("coletar", help="coleta as cartas mais recentes das fontes ativas")
+    p_col.add_argument("--fontes", nargs="*", default=None,
+                       help="slugs específicos (padrão: todas as ativas)")
     sub.add_parser("resumir", help="gera resumos dos documentos pendentes (requer IA acoplada)")
     sub.add_parser("consenso", help="gera o relatório de consenso/divergência")
     sub.add_parser("ciclo", help="executa coleta + resumo + consenso")
@@ -24,7 +26,7 @@ def main() -> None:
 
     if args.cmd == "coletar":
         from .pipeline import executar_coleta
-        executar_coleta()
+        executar_coleta(args.fontes or None)
     elif args.cmd == "resumir":
         from .pipeline import executar_resumos
         executar_resumos()

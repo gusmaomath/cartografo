@@ -2,9 +2,10 @@
 
 Pipeline modular para **extração, armazenamento e sumarização** de cartas de
 gestores e relatórios macroeconômicos das principais assets brasileiras.
-Coleta o documento mais recente de cada fonte (PDF ou HTML), persiste em SQLite,
-gera um resumo técnico estruturado por carta e um relatório de
-**consenso × divergência** de mercado.
+Coleta as cartas mais recentes de cada fonte (até `max_documentos` por gestora
+— cobrindo casas com uma carta por fundo/série, como Kapitalo e Occam),
+persiste em SQLite, gera um resumo técnico estruturado por carta e um relatório
+de **consenso × divergência** de mercado.
 
 > Persistência: **SQLite apenas**. O pipeline de IA é um **contrato plugável** —
 > o modelo real é interno do banco e acoplado depois, sem refatorar o restante.
@@ -12,7 +13,7 @@ gera um resumo técnico estruturado por carta e um relatório de
 ## Arquitetura
 
 ```
-Fontes (21 gestoras)
+Fontes (30 gestoras)
         │  registry declarativo
         ▼
 Orquestrador (APScheduler)
@@ -77,7 +78,8 @@ pré-agregação de consenso, extração de corpo/data, truncamento ao LLM) — 
 ## Uso (CLI)
 
 ```bash
-python -m cartografo.run coletar     # coleta as fontes implementadas (Dynamo, Kinea)
+python -m cartografo.run coletar     # coleta todas as fontes ativas
+python -m cartografo.run coletar --fontes dynamo kinea   # só fontes específicas
 python -m cartografo.run resumir     # gera resumos (requer IA acoplada)
 python -m cartografo.run consenso    # gera o relatório de consenso
 python -m cartografo.run ciclo       # coleta + resumo + consenso
@@ -108,15 +110,23 @@ O retorno deve ser **apenas o JSON** no schema de `SYSTEM_PROMPT_RESUMO`
 
 ## Adicionar uma nova gestora
 
-1. Adicione uma `FonteConfig` em `cartografo/registry.py` (já há 19 catalogadas).
-2. Crie o scraper concreto em `cartografo/scrapers/` herdando de `BaseScraper`.
-3. Registre-o em `cartografo/scrapers/factory.py`.
+1. Adicione uma `FonteConfig` em `cartografo/registry.py` (já há 30 catalogadas).
+   - `max_documentos` controla quantas cartas por execução;
+   - `paginas_extra` aceita listagens adicionais (ex.: uma página por fundo,
+     como as 5 séries da Kapitalo — Kappa/Zeta, NW3, K10, Tarkus, Temáticas);
+   - `urls_diretas` baixa documentos de URL fixa sem etapa de descoberta
+     (ex.: os relatórios mensais por fundo da Ibiuna, cujo PDF mantém a mesma
+     URL e troca de conteúdo a cada edição — o dedup por hash detecta).
+2. (Opcional) Crie um scraper concreto em `cartografo/scrapers/` herdando de
+   `BaseScraper` — implemente `coletar()` para múltiplas cartas — e registre-o
+   em `cartografo/scrapers/factory.py`. Sem scraper dedicado, vale o genérico.
 
 ## Robustez e fallbacks
 
-Todas as 21 fontes são tentadas a cada coleta. Quem não tem scraper dedicado
-(Dynamo, Kinea) cai no **scraper genérico**, guiado por heurística. Cada etapa
-tem cascata de fallbacks:
+Todas as 30 fontes são tentadas a cada coleta. Quem não tem scraper dedicado
+(Dynamo, Kinea, Genoa) cai no **scraper genérico**, guiado por heurística, que
+coleta até `max_documentos` cartas por fonte (deduplicadas por URL e por hash
+de conteúdo). Cada etapa tem cascata de fallbacks:
 
 - **Rede**: retry com backoff exponencial + rotação de User-Agent; se um agente
   é bloqueado, tenta o próximo.

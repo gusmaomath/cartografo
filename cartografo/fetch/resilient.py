@@ -45,7 +45,11 @@ def _client(ua: str) -> httpx.Client:
 
 
 def obter_resposta(url: str) -> httpx.Response:
-    """GET resiliente: para cada UA, tenta com retries. Falha só se TODOS falharem."""
+    """
+    GET resiliente: para cada UA, tenta com retries. Falha só se TODOS falharem.
+    Erros 4xx determinísticos (404/410…) falham rápido — retry não muda o
+    resultado; a rotação de UA fica reservada a bloqueios (403/429).
+    """
     erros: list[str] = []
     for ua in USER_AGENTS:
         def _go(_ua=ua):
@@ -56,6 +60,11 @@ def obter_resposta(url: str) -> httpx.Response:
                 return r
         try:
             return retry_com_backoff(_go, tentativas=2)
+        except httpx.HTTPStatusError as exc:
+            codigo = exc.response.status_code
+            erros.append(f"HTTP {codigo}")
+            if codigo not in (403, 429):  # 404/410/…: outro UA não resolve
+                break
         except Exception as exc:  # noqa: BLE001
             erros.append(f"{exc.__class__.__name__}")
     raise RuntimeError(f"Todas as estratégias HTTP falharam para {url}: {erros}")

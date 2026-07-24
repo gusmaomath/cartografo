@@ -14,29 +14,41 @@ from .base import BaseScraper
 
 class KineaScraper(BaseScraper):
     def coletar_mais_recente(self) -> Optional[DocumentoColetado]:
+        docs = self.coletar()
+        return docs[0] if docs else None
+
+    def coletar(self) -> list[DocumentoColetado]:
         soup = BeautifulSoup(fetch_estatico(self.config.url_listagem), "lxml")
-        url_post = self._primeiro_post(soup)
-        if not url_post:
+        posts = self._posts(soup)
+        if not posts:
             self.log.warning("Nenhum post de carta encontrado na Kinea.")
-            return None
-        self.log.info("Post mais recente: %s", url_post)
+            return []
 
-        soup_post = BeautifulSoup(fetch_estatico(url_post), "lxml")
-        titulo = soup_post.find("h1") or soup_post.find("title")
-        titulo = titulo.get_text(strip=True) if titulo else "Carta do Gestor — Kinea"
-        texto = self.limpar_texto(extrair_corpo(soup_post, self.config.seletor_corpo))
+        docs = []
+        for url_post in posts[: self.config.max_documentos]:
+            self.log.info("Coletando post: %s", url_post)
+            try:
+                soup_post = BeautifulSoup(fetch_estatico(url_post), "lxml")
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Falha ao baixar %s: %s", url_post, exc)
+                continue
+            titulo = soup_post.find("h1") or soup_post.find("title")
+            titulo = titulo.get_text(strip=True) if titulo else "Carta do Gestor — Kinea"
+            texto = self.limpar_texto(extrair_corpo(soup_post, self.config.seletor_corpo))
+            docs.append(DocumentoColetado(
+                gestora_slug=self.config.slug, titulo=titulo, url_documento=url_post,
+                texto=texto, tipo="html",
+            ))
+        return docs
 
-        return DocumentoColetado(
-            gestora_slug=self.config.slug, titulo=titulo, url_documento=url_post,
-            texto=texto, tipo="html",
-        )
-
-    def _primeiro_post(self, soup: BeautifulSoup) -> Optional[str]:
+    def _posts(self, soup: BeautifulSoup) -> list[str]:
+        urls, vistos = [], set()
         for a in soup.select(self.config.seletor_link):
             href = a.get("href", "")
             if not href:
                 continue
             url = urljoin(self.config.url_listagem, href)
-            if "/blog/" in url and "categoria" not in url:
-                return url
-        return None
+            if "/blog/" in url and "categoria" not in url and url not in vistos:
+                vistos.add(url)
+                urls.append(url)
+        return urls

@@ -25,7 +25,7 @@ async function carregarCartas() {
     return;
   }
   const linhas = docs.map((d) => `
-    <tr>
+    <tr class="linha-carta" data-id="${d.id}" title="Clique para ver o conteúdo">
       <td class="gestora">${esc(d.gestora)}</td>
       <td>${esc(d.titulo)}</td>
       <td><span class="tag ${esc(d.tipo)}">${esc(d.tipo)}</span></td>
@@ -35,6 +35,58 @@ async function carregarCartas() {
   alvo.innerHTML = `<table>
       <thead><tr><th>Gestora</th><th>Título</th><th>Tipo</th><th>Status</th><th>Data</th></tr></thead>
       <tbody>${linhas}</tbody></table>`;
+
+  alvo.querySelectorAll(".linha-carta").forEach((tr) => {
+    tr.addEventListener("click", () => alternarConteudo(tr));
+  });
+}
+
+// Expande/recolhe o conteúdo da carta logo abaixo da linha clicada.
+async function alternarConteudo(tr) {
+  const aberta = tr.nextElementSibling?.classList.contains("linha-conteudo");
+  if (aberta) { tr.nextElementSibling.remove(); tr.classList.remove("expandida"); return; }
+  // fecha qualquer outra aberta
+  document.querySelectorAll(".linha-conteudo").forEach((r) => r.remove());
+  document.querySelectorAll(".linha-carta.expandida").forEach((r) => r.classList.remove("expandida"));
+
+  tr.classList.add("expandida");
+  const detalhe = document.createElement("tr");
+  detalhe.className = "linha-conteudo";
+  detalhe.innerHTML = `<td colspan="5"><div class="conteudo-carta carregando">carregando…</div></td>`;
+  tr.after(detalhe);
+
+  try {
+    const d = await api(`/api/documentos/${tr.dataset.id}`);
+    const ehPdf = d.tipo === "pdf";
+    const visorPdf = `<iframe class="visor-pdf" src="/api/documentos/${d.id}/original#view=FitH"
+                        title="${esc(d.titulo)}"></iframe>`;
+    const textoExtraido = `<pre class="texto-carta">${esc(d.texto || "(sem texto extraído)")}</pre>`;
+    detalhe.innerHTML = `<td colspan="5">
+      <div class="conteudo-carta">
+        <div class="conteudo-acoes">
+          <div class="conteudo-links">
+            <a href="${esc(d.url)}" target="_blank" rel="noopener">abrir no site da gestora ↗</a>
+            ${ehPdf ? `<button class="btn-alternar" type="button">ver texto extraído</button>` : ""}
+          </div>
+          <span class="conteudo-meta">${esc(d.tipo)} · ${(d.texto || "").length.toLocaleString("pt-BR")} caracteres extraídos</span>
+        </div>
+        <div class="corpo-visor">${ehPdf ? visorPdf : textoExtraido}</div>
+      </div></td>`;
+
+    // PDF: alterna entre o documento original (tabelas/gráficos) e o texto puro.
+    const btn = detalhe.querySelector(".btn-alternar");
+    if (btn) {
+      const corpo = detalhe.querySelector(".corpo-visor");
+      let mostrandoPdf = true;
+      btn.addEventListener("click", () => {
+        mostrandoPdf = !mostrandoPdf;
+        corpo.innerHTML = mostrandoPdf ? visorPdf : textoExtraido;
+        btn.textContent = mostrandoPdf ? "ver texto extraído" : "ver documento original";
+      });
+    }
+  } catch {
+    detalhe.innerHTML = `<td colspan="5"><div class="conteudo-carta">falha ao carregar o conteúdo</div></td>`;
+  }
 }
 
 // ---- Aba Resumos ----

@@ -21,18 +21,19 @@ from .scrapers.factory import get_scraper
 log = logging.getLogger("cartografo.pipeline")
 
 
-def _coletar_uma(slug: str) -> Optional[DocumentoColetado]:
+def _coletar_uma(slug: str) -> list[DocumentoColetado]:
     """Coleta com retry. Cada fonte é isolada — exceções não vazam para o lote."""
     return retry_com_backoff(
-        lambda: get_scraper(slug).coletar_mais_recente(),
+        lambda: get_scraper(slug).coletar(),
         tentativas=2, base_delay=2.0,
     )
 
 
 def executar_coleta(slugs: Optional[list[str]] = None) -> dict:
     """
-    Tenta coletar a carta mais recente de TODAS as fontes ativas (não só as
-    com scraper dedicado). Registra sucesso/falha por fonte e segue em frente.
+    Tenta coletar as cartas mais recentes de TODAS as fontes ativas — até
+    `max_documentos` por gestora, cobrindo casas com carta por fundo/série.
+    Registra sucesso/falha por fonte e segue em frente.
     Retorna um resumo agregado da execução.
     """
     engine = get_engine()
@@ -47,7 +48,7 @@ def executar_coleta(slugs: Optional[list[str]] = None) -> dict:
         nome = REGISTRY[slug].nome
         log.info("--- Coletando: %s (%s) ---", nome, slug)
         try:
-            doc = _coletar_uma(slug)
+            docs = _coletar_uma(slug)
         except Exception as exc:  # noqa: BLE001 - resiliência por fonte
             falhas += 1
             motivo = f"{exc.__class__.__name__}: {exc}"[:380]
@@ -57,29 +58,36 @@ def executar_coleta(slugs: Optional[list[str]] = None) -> dict:
             detalhes.append({"gestora": slug, "ok": False, "motivo": motivo})
             continue
 
-        if not doc or len(doc.texto) < 120:
+        docs = [d for d in docs if d and len(d.texto) >= 500]
+        if not docs:
             falhas += 1
-            motivo = "documento vazio ou texto insuficiente"
+            motivo = "nenhum documento com texto suficiente"
             with Session(engine) as s:
                 registrar_log_coleta(s, slug, sucesso=False, motivo=motivo)
             detalhes.append({"gestora": slug, "ok": False, "motivo": motivo})
             continue
 
+        novos_fonte, dup_fonte = 0, 0
         with Session(engine) as s:
-            registro = salvar_documento(s, doc)
-            if registro is None:
-                duplicados += 1
-                registrar_log_coleta(s, slug, sucesso=True, motivo="duplicado (já coletado)")
-                detalhes.append({"gestora": slug, "ok": True, "motivo": "duplicado"})
-                continue
-            novos_ids.append(registro.id)
-            sucessos += 1
-            registrar_log_coleta(s, slug, sucesso=True, documento_id=registro.id)
-            detalhes.append({"gestora": slug, "ok": True, "documento_id": registro.id})
+            for doc in docs:
+                registro = salvar_documento(s, doc)
+                if registro is None:
+                    duplicados += 1
+                    dup_fonte += 1
+                    continue
+                novos_ids.append(registro.id)
+                sucessos += 1
+                novos_fonte += 1
+                registrar_log_coleta(s, slug, sucesso=True, documento_id=registro.id)
+            if novos_fonte == 0:
+                registrar_log_coleta(s, slug, sucesso=True,
+                                     motivo=f"{dup_fonte} duplicado(s) (já coletados)")
+        detalhes.append({"gestora": slug, "ok": True,
+                         "novos": novos_fonte, "duplicados": dup_fonte})
 
     resumo = {"total": len(alvos), "novos": sucessos, "duplicados": duplicados,
               "falhas": falhas, "novos_ids": novos_ids, "detalhes": detalhes}
-    log.info("Coleta concluída: %d novos, %d duplicados, %d falhas (de %d fontes).",
+    log.info("Coleta concluída: %d novos docs, %d duplicados, %d fontes com falha (de %d fontes).",
              sucessos, duplicados, falhas, len(alvos))
     return resumo
 

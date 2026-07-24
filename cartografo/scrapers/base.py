@@ -19,6 +19,15 @@ class BaseScraper(ABC):
     def coletar_mais_recente(self) -> Optional[DocumentoColetado]:
         ...
 
+    def coletar(self) -> list[DocumentoColetado]:
+        """
+        Coleta até `config.max_documentos` cartas da fonte (a mais recente de
+        cada fundo/série quando houver várias). Implementação padrão devolve
+        apenas a mais recente; scrapers multi-documento sobrescrevem.
+        """
+        doc = self.coletar_mais_recente()
+        return [doc] if doc else []
+
     @staticmethod
     def limpar_texto(texto: str) -> str:
         return limpar_texto(texto)

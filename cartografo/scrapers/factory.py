@@ -5,12 +5,14 @@ from ..registry import REGISTRY
 from .base import BaseScraper
 from .dynamo import DynamoScraper
 from .generico import GenericScraper
+from .genoa import GenoaScraper
 from .kinea import KineaScraper
 
 # Scrapers concretos (sobrescrevem o genérico quando registrados).
 SCRAPERS: dict[str, type[BaseScraper]] = {
     "dynamo": DynamoScraper,
     "kinea": KineaScraper,
+    "genoa": GenoaScraper,
 }
 
 

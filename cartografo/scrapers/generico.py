@@ -1,15 +1,18 @@
 """
 Scraper genérico guiado por heurística. Cobre qualquer gestora sem código
-dedicado, com cascata de fallbacks de coleta e extração. Scrapers concretos
-(Dynamo, Kinea) têm prioridade quando registrados.
+dedicado, com cascata de fallbacks de coleta e extração. Coleta múltiplos
+documentos por fonte (uma carta por fundo/série quando a listagem tem várias)
+e varre também as `paginas_extra` configuradas no registry.
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
+from urllib.parse import unquote, urlparse
 
 from bs4 import BeautifulSoup
 
-from ..extract.descoberta import descobrir_documento
+from ..extract.descoberta import descobrir_documentos
 from ..extract.html import extrair_corpo
 from ..extract.pdf import extrair_texto_pdf
 from ..fetch.resilient import obter_html_dinamico, obter_listagem, obter_resposta
@@ -18,27 +21,85 @@ from ..schemas import DocumentoColetado
 from .base import BaseScraper
 
 _CORPO_PADRAO = "article, .post-content, .entry-content, .content, main"
+_TITULOS_GENERICOS = ("baixar pdf", "baixar", "download", "leia aqui", "leia mais",
+                      "clique aqui", "acesse", "ver carta", "abrir", "pdf", "ver mais")
+
+
+def _titulo_do_arquivo(url: str) -> str:
+    nome = unquote(urlparse(url).path.split("/")[-1])
+    nome = re.sub(r"\.pdf$", "", nome, flags=re.I)
+    return re.sub(r"[-_]+", " ", nome).strip() or url
 
 
 class GenericScraper(BaseScraper):
     def coletar_mais_recente(self) -> Optional[DocumentoColetado]:
+        docs = self.coletar(limite_total=1)
+        return docs[0] if docs else None
+
+    def coletar(self, limite_total: int | None = None) -> list[DocumentoColetado]:
         dinamico = self.config.estrategia == Estrategia.HTML_DINAMICO
+        limite = limite_total or self.config.max_documentos
 
-        # 1) Listagem (estático↔dinâmico com fallback)
-        html, estrat = obter_listagem(
-            self.config.url_listagem, dinamico=dinamico,
-            espera_seletor=self.config.seletor_item or None)
-        self.log.info("Listagem via '%s'", estrat)
+        # 0) Documentos em URL fixa (ex.: relatório mensal por fundo) — sem
+        # descoberta; a troca de edição é detectada pelo dedup de hash.
+        docs: list[DocumentoColetado] = []
+        for direto in self.config.urls_diretas[:limite]:
+            try:
+                doc = self._coletar_conteudo(direto["url"], direto["titulo"], dinamico)
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("URL direta falhou (%s): %s", direto["url"], exc)
+                continue
+            if doc and len(doc.texto) >= 120:
+                docs.append(doc)
+        if len(docs) >= limite:
+            return docs
 
-        # 2) Descoberta do documento mais recente
-        achado = descobrir_documento(html, self.config)
-        if not achado:
-            self.log.warning("Nenhum documento candidato encontrado na listagem.")
-            return None
-        self.log.info("Candidato (score=%s): %s", achado["score"], achado["url"])
+        # Candidatos de todas as listagens (principal + uma por fundo, se houver)
+        paginas = [self.config.url_listagem] + list(self.config.paginas_extra)
+        por_pagina = limite if len(paginas) == 1 else max(2, limite // len(paginas) + 1)
 
-        # 3) Conteúdo, com detecção robusta de tipo (magic bytes) e fallbacks
-        return self._coletar_conteudo(achado["url"], achado["titulo"], dinamico)
+        por_listagem: list[list[dict]] = []
+        for pagina in paginas:
+            try:
+                html, estrat = obter_listagem(
+                    pagina, dinamico=dinamico,
+                    espera_seletor=self.config.seletor_item or None)
+                self.log.info("Listagem %s via '%s'", pagina, estrat)
+            except Exception as exc:  # noqa: BLE001 - uma listagem não derruba as demais
+                self.log.warning("Listagem %s falhou: %s", pagina, exc)
+                continue
+            por_listagem.append(descobrir_documentos(
+                html, self.config, limite=por_pagina, url_base=pagina))
+
+        # Round-robin entre as listagens: garante a carta mais recente de CADA
+        # fundo antes de aprofundar no histórico de um único.
+        candidatos: list[dict] = []
+        vistos: set[str] = set()
+        for rodada in range(por_pagina):
+            for achados in por_listagem:
+                if rodada < len(achados) and achados[rodada]["url"] not in vistos:
+                    vistos.add(achados[rodada]["url"])
+                    candidatos.append(achados[rodada])
+
+        if not candidatos:
+            if not docs:
+                self.log.warning("Nenhum documento candidato encontrado nas listagens.")
+            return docs
+
+        urls_ja_coletadas = {d.url_documento for d in docs}
+        candidatos = [c for c in candidatos if c["url"] not in urls_ja_coletadas]
+        for achado in candidatos[: limite * 2]:  # folga p/ candidatos que falham
+            if len(docs) >= limite:
+                break
+            self.log.info("Candidato (score=%s): %s", achado["score"], achado["url"])
+            try:
+                doc = self._coletar_conteudo(achado["url"], achado["titulo"], dinamico)
+            except Exception as exc:  # noqa: BLE001 - segue para o próximo candidato
+                self.log.warning("Falha ao coletar %s: %s", achado["url"], exc)
+                continue
+            if doc and len(doc.texto) >= 120:
+                docs.append(doc)
+        return docs
 
     def _coletar_conteudo(self, url: str, titulo: str, dinamico: bool) -> Optional[DocumentoColetado]:
         resp = obter_resposta(url)
@@ -49,6 +110,8 @@ class GenericScraper(BaseScraper):
         if eh_pdf:
             texto = extrair_texto_pdf(conteudo)
             tipo = "pdf"
+            if not titulo or titulo.strip().lower() in _TITULOS_GENERICOS:
+                titulo = _titulo_do_arquivo(url)
         else:
             soup = BeautifulSoup(resp.text, "lxml")
             h1 = soup.find("h1") or soup.find("title")

@@ -5,7 +5,7 @@ import logging
 import threading
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -61,6 +61,40 @@ def get_documento(doc_id: int):
             raise HTTPException(404, "Documento não encontrado")
         return {"id": d.id, "gestora": d.gestora_slug, "titulo": d.titulo,
                 "tipo": d.tipo, "texto": d.texto, "url": d.url_documento}
+
+
+# Cache do documento original (evita rebaixar o PDF a cada visualização).
+_cache_original: dict[int, tuple[str, bytes]] = {}
+_CACHE_ORIGINAL_MAX = 20
+
+
+@app.get("/api/documentos/{doc_id}/original")
+def get_documento_original(doc_id: int):
+    """Serve o documento original (PDF/HTML) via proxy same-origin.
+
+    Permite embutir o PDF no painel com tabelas/gráficos preservados —
+    iframes diretos para o domínio da gestora esbarram em CORS/X-Frame-Options.
+    """
+    with Session(_engine) as s:
+        d = s.get(Documento, doc_id)
+        if not d:
+            raise HTTPException(404, "Documento não encontrado")
+        url = d.url_documento
+    if doc_id not in _cache_original:
+        from ..fetch.resilient import obter_resposta
+        try:
+            r = obter_resposta(url)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(502, f"Falha ao baixar o original: {exc}") from exc
+        ctype = r.headers.get("content-type", "application/octet-stream").split(";")[0]
+        if r.content[:4] == b"%PDF":
+            ctype = "application/pdf"
+        while len(_cache_original) >= _CACHE_ORIGINAL_MAX:
+            _cache_original.pop(next(iter(_cache_original)))
+        _cache_original[doc_id] = (ctype, r.content)
+    ctype, conteudo = _cache_original[doc_id]
+    return Response(content=conteudo, media_type=ctype,
+                    headers={"Content-Disposition": "inline"})
 
 
 @app.get("/api/resumos")
